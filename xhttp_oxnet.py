@@ -429,7 +429,16 @@ async def stream_up_upload(path_key: str, session_id: str, request: Request):
                 writer = sess["writer"]
                 continue
 
-            writer.write(chunk)
+                        # Traffic Shaping (Obfuscation)
+            import random
+            if len(chunk) > 1024:
+                split_point = random.randint(512, len(chunk) - 128)
+                writer.write(chunk[:split_point])
+                await writer.drain()
+                await asyncio.sleep(random.uniform(0.001, 0.005))
+                writer.write(chunk[split_point:])
+            else:
+                writer.write(chunk)
             if flow.should_drain(writer.transport.get_write_buffer_size()):
                 await flow.drain(writer)
     except HTTPException:

@@ -99,18 +99,73 @@ async def health():
 
 
 # ── Subscription (single link) ────────────────────────────────
+
 @app.get("/sub/{uuid}")
 async def subscription_single(uuid: str, request: Request):
     from urllib.parse import quote
+    import base64
     async with LINKS_LOCK:
         real_uid, link = resolve_link_key(uuid)
     if not real_uid or not link or not is_link_allowed(link):
         raise HTTPException(status_code=404, detail="not found or inactive")
     host = get_host(request)
     sub_text = subscription_text_for_link(link, real_uid, host)
+    
+    user_agent = request.headers.get("user-agent", "").lower()
+    title = quote(link["label"])
+    
+    if "clash" in user_agent or "meta" in user_agent:
+        lines = sub_text.split("
+")
+        proxies = []
+        names = []
+        for line in lines:
+            if line.startswith("vless://"):
+                parts = line.split("vless://")[1].split("@")
+                uid = parts[0]
+                rest = parts[1].split(":")
+                srv = rest[0]
+                port_params = rest[1].split("?")
+                prt = port_params[0]
+                name = port_params[1].split("#")[1] if "#" in port_params[1] else "VLESS"
+                proxies.append("  - name: '" + name + "'
+    type: vless
+    server: " + srv + "
+    port: " + prt + "
+    uuid: " + uid + "
+    udp: true
+    tls: true
+    network: ws
+    servername: " + srv + "
+    ws-opts:
+      path: /ws
+      headers:
+        Host: " + srv)
+                names.append("      - '" + name + "'")
+        yaml_data = "port: 7890
+socks-port: 7891
+allow-lan: true
+mode: rule
+log-level: info
+proxies:
+" + "
+".join(proxies) + "
+proxy-groups:
+  - name: PROXY
+    type: select
+    proxies:
+" + "
+".join(names) + "
+rules:
+  - DOMAIN-SUFFIX,ir,DIRECT
+  - GEOIP,IR,DIRECT
+  - MATCH,PROXY
+"
+        return Response(content=yaml_data, media_type="text/yaml", headers={"profile-title": title})
+        
     content = base64.b64encode(sub_text.encode()).decode()
-    return Response(content=content, media_type="text/plain",
-                    headers={"profile-title": quote(link["label"])})
+    return Response(content=content, media_type="text/plain", headers={"profile-title": title})
+
 
 
 @app.get("/sub-all")
@@ -348,7 +403,6 @@ def get_sys_info():
     mem_percent = 0
     mem_used = 0
     mem_total = 0
-    disk_percent = 0
     try:
         with open('/proc/stat', 'r') as f:
             lines = f.readlines()
@@ -374,14 +428,17 @@ def get_sys_info():
         import shutil
         disk = shutil.disk_usage('/')
         disk_percent = round(disk.used / disk.total * 100, 1)
-    except: pass
+    except:
+        disk_percent = 0
     return cpu, mem_percent, mem_used, mem_total, disk_percent
 
 @app.get("/stats")
 async def get_stats(_=Depends(require_auth)):
     async with LINKS_LOCK:
         snap = dict(LINKS)
+    
     cpu, mem_percent, mem_used, mem_total, disk_percent = get_sys_info()
+    
     return {
         "active_connections": len(connections),
         "total_traffic_mb": round(stats["total_bytes"] / (1024 ** 2), 2),
@@ -729,7 +786,7 @@ async def dashboard(request: Request):
         return HTMLResponse("Pages module missing", status_code=500)
 
 
-if False:
+if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=CONFIG["port"], log_level="info", workers=1)
 
 # ── Fallback (Camouflage) ──────────────────────────────
@@ -750,11 +807,6 @@ async def catch_all(path: str, request: Request):
     return RedirectResponse(url="https://www.apple.com")
 
 # ── UVLoop integration ─────────────────────────────────
-if False:
-    try:
-        import uvloop
-        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-        logger.info("uvloop enabled for extreme performance")
-    except ImportError:
-        pass
+if __name__ == "__main__":
+    
     uvicorn.run("main:app", host="0.0.0.0", port=CONFIG["port"], log_level="info", workers=1)

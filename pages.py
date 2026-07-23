@@ -305,6 +305,25 @@ tr:hover td{background:var(--bg)}
 
 <section class="view active" id=v-overview>
   <div class=stats id=statsGrid></div>
+<div class=panel style="margin-bottom:24px">
+  <h3>🖥️ مانیتورینگ منابع سرور</h3>
+  <div class=stats style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px;">
+    <div class="stat" style="text-align:center; padding:16px">
+      <span style="font-size:12px; color:var(--text-muted)">مصرف CPU</span>
+      <b id="sysCpu" style="font-size:22px; color:var(--primary)">0%</b>
+    </div>
+    <div class="stat" style="text-align:center; padding:16px">
+      <span style="font-size:12px; color:var(--text-muted)">مصرف RAM</span>
+      <b id="sysMem" style="font-size:22px; color:var(--primary)">0%</b>
+      <div style="font-size:10px; margin-top:4px" id="sysMemText">0 / 0 GB</div>
+    </div>
+    <div class="stat" style="text-align:center; padding:16px">
+      <span style="font-size:12px; color:var(--text-muted)">هارد دیسک</span>
+      <b id="sysDisk" style="font-size:22px; color:var(--primary)">0%</b>
+    </div>
+  </div>
+</div>
+
   <div class=panel><h3>ترافیک ۲۴ ساعت اخیر</h3><div class=bars id=bars></div></div>
   <div class=panel><h3>رویدادهای اخیر</h3><div id=recentAct></div></div>
 </section>
@@ -373,7 +392,12 @@ async function loadStats(){try{var d=await api('/stats');document.getElementById
   var cards=[['🌐',d.active_connections,'اتصال زنده'],['⚡',d.active_links+' / '+d.links_count,'کانفیگ فعال'],['📁',d.subs_count,'گروه اشتراک'],['💾',d.total_traffic_mb+' MB','کل ترافیک'],['🔥',d.total_requests,'تعداد درخواست'],['⚠️',d.total_errors,'خطای سیستم']];
   g.innerHTML=cards.map(c=>'<div class="stat"><b>'+c[1]+'</b><span>'+c[2]+'</span></div>').join('');
   var hrs=[];for(var i=23;i>=0;i--){var h=new Date(Date.now()-i*3600000).getHours();hrs.push((h<10?'0':'')+h+':00');}
-  var mx=Math.max(1,...hrs.map(h=>d.hourly[h]||0));
+  
+  document.getElementById('sysCpu').textContent = d.sys_cpu + '%';
+  document.getElementById('sysMem').textContent = d.sys_mem_percent + '%';
+  document.getElementById('sysMemText').textContent = d.sys_mem_used_gb + ' / ' + d.sys_mem_total_gb + ' GB';
+  document.getElementById('sysDisk').textContent = d.sys_disk_percent + '%';
+\n  var mx=Math.max(1,...hrs.map(h=>d.hourly[h]||0));
   document.getElementById('bars').innerHTML=hrs.map(h=>{var v=d.hourly[h]||0;return '<div class=b style=height:'+Math.max(3,v/mx*100)+'% title="'+h+' • '+fmt(v)+'"><span>'+h.slice(0,2)+'</span></div>';}).join('');
 }catch(e){}}
 
